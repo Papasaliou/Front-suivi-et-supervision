@@ -1,0 +1,199 @@
+<!-- components/admin/admin-dashboard/admin-dashboard.component.html -->
+<div class="admin-container">
+  <mat-toolbar color="primary" class="toolbar">
+    <span class="toolbar-title">
+      <mat-icon>admin_panel_settings</mat-icon>
+      Administration
+    </span>
+
+    <span class="spacer"></span>
+
+    <button mat-button (click)="goToDashboard()">
+      <mat-icon>dashboard</mat-icon>
+      Tableau de bord
+    </button>
+
+    <button mat-button (click)="logout()">
+      <mat-icon>logout</mat-icon>
+      Déconnexion
+    </button>
+  </mat-toolbar>
+
+  <div class="content">
+    <div class="header">
+      <h2>Gestion des Plateformes</h2>
+      <button mat-raised-button color="primary" (click)="refreshAllStatuses()" [disabled]="loading">
+        <mat-icon>refresh</mat-icon>
+        Actualiser tout
+      </button>
+    </div>
+
+    <mat-card class="platforms-card">
+      <mat-card-content>
+        <div *ngIf="loading" class="loading-container">
+          <mat-spinner></mat-spinner>
+          <p>Chargement des plateformes...</p>
+        </div>
+
+        <div *ngIf="error" class="error-container">
+          <mat-icon>error</mat-icon>
+          <p>{{ error }}</p>
+          <button mat-raised-button color="primary" (click)="loadPlatforms()">
+            Réessayer
+          </button>
+        </div>
+
+        <div *ngIf="!loading && !error && platforms.length === 0" class="no-data">
+          <mat-icon>cloud_off</mat-icon>
+          <p>Aucune plateforme configurée</p>
+        </div>
+
+        <table mat-table [dataSource]="platforms" *ngIf="!loading && !error && platforms.length > 0" class="platforms-table">
+          <!-- Nom -->
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Nom</th>
+            <td mat-cell *matCellDef="let platform">
+              <div class="platform-name">
+                <strong>{{ platform.platformName }}</strong>
+                <mat-chip class="platform-type">{{ platform.type }}</mat-chip>
+              </div>
+            </td>
+          </ng-container>
+
+          <!-- URL -->
+          <ng-container matColumnDef="url">
+            <th mat-header-cell *matHeaderCellDef>URL</th>
+            <td mat-cell *matCellDef="let platform">
+              <a [href]="platform.platformUrl" target="_blank" class="platform-url">
+                {{ platform.platformUrl }}
+                <mat-icon>open_in_new</mat-icon>
+              </a>
+            </td>
+          </ng-container>
+
+          <!-- Statut -->
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Statut</th>
+            <td mat-cell *matCellDef="let platform">
+              <div class="status-cell">
+                <mat-chip [ngClass]="getStatusColor(platform.platformStatus)" class="status-chip">
+                  <mat-icon>{{ getStatusIcon(platform.platformStatus) }}</mat-icon>
+                  {{ getStatusText(platform.platformStatus) }}
+                </mat-chip>
+              </div>
+            </td>
+          </ng-container>
+
+          <!-- Dernière vérification -->
+          <ng-container matColumnDef="lastCheck">
+            <th mat-header-cell *matHeaderCellDef>Dernière vérification</th>
+            <td mat-cell *matCellDef="let platform">
+              <div class="last-check">
+                {{ platform.lastCheck | date:'dd/MM/yyyy HH:mm' }}
+              </div>
+            </td>
+          </ng-container>
+
+          <!-- Actions -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <td mat-cell *matCellDef="let platform">
+              <div class="actions-cell">
+                <button mat-icon-button
+                        (click)="checkPlatformStatus(platform.platformId)"
+                        [disabled]="platform.platformStatus === 'checking'"
+                        matTooltip="Vérifier le statut">
+                  <mat-icon>refresh</mat-icon>
+                </button>
+
+                <button mat-icon-button
+                        color="primary"
+                        (click)="openEmailDialog(platform.platformId)"
+                        matTooltip="Envoyer un email">
+                  <mat-icon>email</mat-icon>
+                </button>
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="platform-row"></tr>
+        </table>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Statistiques globales -->
+    <div class="stats-grid">
+      <mat-card class="stat-card">
+        <mat-card-content>
+          <div class="stat-content">
+            <mat-icon class="stat-icon success">check_circle</mat-icon>
+            <div class="stat-info">
+              <h3>{{ getPlatformsUp() }}</h3>
+              <p>Plateformes en ligne</p>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="stat-card">
+        <mat-card-content>
+          <div class="stat-content">
+            <mat-icon class="stat-icon danger">error</mat-icon>
+            <div class="stat-info">
+              <h3>{{ getPlatformsDown() }}</h3>
+              <p>Plateformes hors ligne</p>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="stat-card">
+        <mat-card-content>
+          <div class="stat-content">
+            <mat-icon class="stat-icon">cloud</mat-icon>
+            <div class="stat-info">
+              <h3>{{ platforms.length }}</h3>
+              <p>Total plateformes</p>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+  </div>
+
+  <!-- Dialog pour l'envoi d'email -->
+  <div *ngIf="selectedPlatformId" class="email-overlay" (click)="closeEmailDialog()">
+    <mat-card class="email-dialog" (click)="$event.stopPropagation()">
+      <mat-card-header>
+        <mat-card-title>Envoyer un email d'alerte</mat-card-title>
+        <button mat-icon-button (click)="closeEmailDialog()" class="close-button">
+          <mat-icon>close</mat-icon>
+        </button>
+      </mat-card-header>
+
+      <mat-card-content>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Message</mat-label>
+          <textarea matInput
+                    [(ngModel)]="emailMessage"
+                    rows="5"
+                    placeholder="Décrivez le problème ou l'alerte..."></textarea>
+        </mat-form-field>
+      </mat-card-content>
+
+      <mat-card-actions align="end">
+        <button mat-button (click)="closeEmailDialog()" [disabled]="sendingEmail">
+          Annuler
+        </button>
+        <button mat-raised-button
+                color="primary"
+                (click)="sendEmail()"
+                [disabled]="!emailMessage.trim() || sendingEmail">
+          <mat-spinner diameter="20" *ngIf="sendingEmail"></mat-spinner>
+          <span *ngIf="!sendingEmail">Envoyer</span>
+        </button>
+      </mat-card-actions>
+    </mat-card>
+  </div>
+</div>
